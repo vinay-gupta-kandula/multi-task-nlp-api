@@ -1,0 +1,23 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+
+# Data
+data/
+!data/.gitkeep
+
+# MLflow
+mlruns/
+!mlruns/.gitkeep
+
+# Checkpoints
+*.pth
+*.bin
+
+# OS generated files
+.DS_Store
+Thumbs.db
