@@ -44,7 +44,6 @@ def load_model():
     print("Connecting to MLflow:", mlflow_uri)
     mlflow.set_tracking_uri(mlflow_uri)
 
-    # wait for experiment
     experiment = None
     for _ in range(12):
         experiment = mlflow.get_experiment_by_name(exp_name)
@@ -73,11 +72,7 @@ def load_model():
         client = mlflow.tracking.MlflowClient()
         local_path = client.download_artifacts(run_id, "onnx/model.onnx")
 
-        ort_session = ort.InferenceSession(
-            local_path,
-            providers=["CPUExecutionProvider"]
-        )
-
+        ort_session = ort.InferenceSession(local_path, providers=["CPUExecutionProvider"])
         tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_fast=True)
 
         print("Model loaded successfully")
@@ -86,7 +81,7 @@ def load_model():
         print("Model loading failed:", e)
 
 
-# ---------------- METRICS MIDDLEWARE ----------------
+# ---------------- METRICS ----------------
 @app.middleware("http")
 async def add_prometheus_metrics(request: Request, call_next):
     start_time = time.time()
@@ -107,7 +102,6 @@ def health_check():
     return {"status": "ok"}
 
 
-# ---------------- PROMETHEUS ----------------
 @app.get("/metrics")
 def metrics():
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
@@ -121,21 +115,20 @@ def predict_sentiment(req: SentimentRequest):
 
     inputs = tokenizer(req.text, return_tensors="np", truncation=True, max_length=128)
 
-    outputs = ort_session.run(None, {
-        "input_ids": inputs["input_ids"],
-        "attention_mask": inputs["attention_mask"]
-    })
+    outputs = ort_session.run(
+        None,
+        {
+            "input_ids": inputs["input_ids"].astype(np.float32),
+            "attention_mask": inputs["attention_mask"].astype(np.float32),
+        },
+    )
 
     logits = outputs[0]
     score = float(logits.max())
     label = int(logits.argmax())
     sentiment = "positive" if label == 1 else "negative"
 
-    return {
-        "text": req.text,
-        "sentiment": sentiment,
-        "score": score
-    }
+    return {"text": req.text, "sentiment": sentiment, "score": score}
 
 
 # ---------------- NER ----------------
@@ -147,10 +140,13 @@ def predict_ner(req: NERRequest):
     inputs = tokenizer(req.text, return_tensors="np", return_offsets_mapping=True, truncation=True, max_length=128)
     offsets = inputs.pop("offset_mapping")[0]
 
-    outputs = ort_session.run(None, {
-        "input_ids": inputs["input_ids"],
-        "attention_mask": inputs["attention_mask"]
-    })
+    outputs = ort_session.run(
+        None,
+        {
+            "input_ids": inputs["input_ids"].astype(np.float32),
+            "attention_mask": inputs["attention_mask"].astype(np.float32),
+        },
+    )
 
     preds = outputs[1].argmax(axis=-1)[0]
     tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
@@ -170,10 +166,7 @@ def predict_ner(req: NERRequest):
                 "end_char": int(off[1])
             })
 
-    return {
-        "text": req.text,
-        "entities": entities
-    }
+    return {"text": req.text, "entities": entities}
 
 
 # ---------------- QA ----------------
@@ -185,10 +178,13 @@ def predict_qa(req: QARequest):
     inputs = tokenizer(req.question, req.context, return_tensors="np", return_offsets_mapping=True, truncation=True, max_length=384)
     offsets = inputs.pop("offset_mapping")[0]
 
-    outputs = ort_session.run(None, {
-        "input_ids": inputs["input_ids"],
-        "attention_mask": inputs["attention_mask"]
-    })
+    outputs = ort_session.run(
+        None,
+        {
+            "input_ids": inputs["input_ids"].astype(np.float32),
+            "attention_mask": inputs["attention_mask"].astype(np.float32),
+        },
+    )
 
     start_logits, end_logits = outputs[2], outputs[3]
     start_idx = int(start_logits.argmax())
