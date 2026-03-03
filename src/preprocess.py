@@ -1,24 +1,23 @@
 import json
+import os
 from datasets import load_dataset
 from pathlib import Path
 
-# trim dataset sizes for resource-constrained training
-# original settings were 1000/200 but that caused OOM in the container
+# Trimming dataset sizes to ensure stability in resource-constrained environments
 MAX_TRAIN = 100
 MAX_VAL = 25
-
 
 def save_json(path, data):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False)
 
-
 def run_preprocessing():
+    # Setup paths relative to the project root
     root_dir = Path(__file__).resolve().parent.parent
     processed_dir = root_dir / "data" / "processed"
     processed_dir.mkdir(parents=True, exist_ok=True)
 
-    # ---------------- SENTIMENT (SST2) ----------------
+    # ---------------- 1. SENTIMENT (Requirement: glue/sst2) ----------------
     print("Processing Sentiment (SST-2)...")
     sst2 = load_dataset("glue", "sst2")
 
@@ -26,31 +25,28 @@ def run_preprocessing():
     val_sst2 = sst2["validation"].select(range(min(MAX_VAL, len(sst2["validation"]))))
 
     def format_sst2(dataset):
+        # Schema: [{"text": "string", "label": "integer"}, ...]
         return [{"text": row["sentence"], "label": int(row["label"])} for row in dataset]
 
     save_json(processed_dir / "sentiment_train.json", format_sst2(train_sst2))
     save_json(processed_dir / "sentiment_validation.json", format_sst2(val_sst2))
 
-    # ---------------- NER ----------------
+    # ---------------- 2. NER (Requirement: conll2003) ----------------
     print("Processing NER (CoNLL-2003)...")
+    # Using eriktks/conll2003 as a reliable mirror for the standard dataset
     conll = load_dataset("eriktks/conll2003")
 
     train_conll = conll["train"].select(range(min(MAX_TRAIN, len(conll["train"]))))
     val_conll = conll["validation"].select(range(min(MAX_VAL, len(conll["validation"]))))
 
     def format_ner(dataset):
-        formatted = []
-        for row in dataset:
-            formatted.append({
-                "tokens": row["tokens"],
-                "tags": [int(t) for t in row["ner_tags"]]
-            })
-        return formatted
+        # Schema: [{"tokens": ["string"], "tags": ["integer"]}, ...]
+        return [{"tokens": row["tokens"], "tags": [int(t) for t in row["ner_tags"]]} for row in dataset]
 
     save_json(processed_dir / "ner_train.json", format_ner(train_conll))
     save_json(processed_dir / "ner_validation.json", format_ner(val_conll))
 
-    # ---------------- QA ----------------
+    # ---------------- 3. QA (Requirement: squad) ----------------
     print("Processing QA (SQuAD)...")
     squad = load_dataset("squad")
 
@@ -58,6 +54,7 @@ def run_preprocessing():
     val_qa = squad["validation"].select(range(min(MAX_VAL, len(squad["validation"]))))
 
     def format_qa(dataset):
+        # Schema: [{"context": "string", "question": "string", "answers": {"text": ["string"], "answer_start": ["integer"]}}, ...]
         formatted = []
         for row in dataset:
             formatted.append({
@@ -73,8 +70,7 @@ def run_preprocessing():
     save_json(processed_dir / "qa_train.json", format_qa(train_qa))
     save_json(processed_dir / "qa_validation.json", format_qa(val_qa))
 
-    print("Data processing complete!")
-
+    print(f"Data processing complete! Files saved to: {processed_dir}")
 
 if __name__ == "__main__":
     run_preprocessing()

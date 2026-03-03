@@ -2,32 +2,35 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# System deps required for transformers + datasets
+# Install system dependencies required for health checks and compilation
 RUN apt-get update && apt-get install -y \
     curl \
     git \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Prevent python buffering (important for logs in docker)
+# Prevent Python from buffering logs (useful for real-time training logs)
 ENV PYTHONUNBUFFERED=1
+# Centralize Hugging Face cache
 ENV TRANSFORMERS_CACHE=/app/cache
 ENV HF_HOME=/app/cache
 
+# Copy requirements first to leverage Docker layer caching
 COPY requirements.txt .
 
-# Install torch CPU first (faster + stable)
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+# Install all dependencies using the CPU-specific index for PyTorch
+# This correctly resolves the 'torch==2.2.1+cpu' mentioned in your requirements.txt
+RUN pip install --no-cache-dir --default-timeout=100 -r requirements.txt \
+    --extra-index-url https://download.pytorch.org/whl/cpu
 
-# Install project dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
+# Copy the rest of the application code
 COPY . .
 
-# Create required folders (important for fresh evaluator clone)
+# Ensure all necessary directories exist for data and MLflow
 RUN mkdir -p /app/data/processed /app/mlruns /app/cache
 
+# Port for the FastAPI application
 EXPOSE 8000
 
-# Let docker-compose control runtime command
+# The startup command is managed by docker-compose.yml
 CMD ["bash"]
