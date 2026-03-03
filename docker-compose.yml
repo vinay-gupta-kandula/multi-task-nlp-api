@@ -1,6 +1,9 @@
+version: '3.8'
+
 services:
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.11.1
+    container_name: mlflow_server
     ports:
       - "5000:5000"
     volumes:
@@ -10,7 +13,7 @@ services:
     # The command to start the MLflow tracking server
     command: mlflow server --host 0.0.0.0 --port 5000
     healthcheck:
-      # Using a Python one-liner because the MLflow image may not have curl installed
+      # Using a Python one-liner because the official MLflow image lacks curl
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/')"]
       interval: 10s
       timeout: 5s
@@ -18,7 +21,8 @@ services:
 
   nlp-api:
     build: .
-    # shm_size is critical for PyTorch to prevent memory exhaustion (Killed/137) during training
+    container_name: nlp_api_service
+    # shm_size is critical for PyTorch to prevent memory exhaustion (Killed/137)
     shm_size: '2gb'
     ports:
       - "8000:8000"
@@ -28,17 +32,18 @@ services:
     env_file:
       - .env
     environment:
-      # Ensures the API points to the mlflow service within the Docker network
+      # Explicitly points the API to the mlflow container within the bridge network
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - MLFLOW_EXPERIMENT_NAME=MultiTaskNLP
     depends_on:
       mlflow:
         condition: service_healthy
     # First runs the multi-task training script, then starts the FastAPI production server
     command: bash -c "python src/train.py && uvicorn src.main:app --host 0.0.0.0 --port 8000"
     healthcheck:
-      # Hits the health endpoint in main.py to confirm the model is loaded and ready
+      # Checks the /health endpoint defined in src/main.py
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 20s
-      timeout: 5s
+      timeout: 10s
       retries: 15
       start_period: 120s

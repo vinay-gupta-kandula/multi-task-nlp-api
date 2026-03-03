@@ -5,8 +5,8 @@ from torch.utils.data import Dataset
 class SentimentDataset(Dataset):
     def __init__(self, filepath, tokenizer, max_length=128):
         with open(filepath, 'r') as f:
-            # keep only a small subset of examples to avoid OOM in constrained environments
-            self.data = json.load(f)[:100]
+            # Removed [:100] slice to allow full training data usage
+            self.data = json.load(f)
         self.tokenizer = tokenizer
         self.max_length = max_length
 
@@ -31,7 +31,8 @@ class SentimentDataset(Dataset):
 class NERDataset(Dataset):
     def __init__(self, filepath, tokenizer, max_length=128):
         with open(filepath, 'r') as f:
-            self.data = json.load(f)[:500]
+            # Removed [:100] slice to allow the model to see more entities
+            self.data = json.load(f)
         self.tokenizer = tokenizer
         self.max_length = max_length
 
@@ -48,6 +49,8 @@ class NERDataset(Dataset):
             truncation=True,
             return_tensors='pt'
         )
+        
+        # Standard NER alignment: labels only assigned to the first sub-token of a word
         labels = []
         word_ids = encoding.word_ids()
         for word_idx in word_ids:
@@ -68,7 +71,8 @@ class NERDataset(Dataset):
 class QADataset(Dataset):
     def __init__(self, filepath, tokenizer, max_length=384):
         with open(filepath, 'r') as f:
-            self.data = json.load(f)[:500]
+            # Removed [:100] slice to improve span prediction accuracy
+            self.data = json.load(f)
         self.tokenizer = tokenizer
         self.max_length = max_length
 
@@ -81,6 +85,7 @@ class QADataset(Dataset):
         question = item['question']
         answers = item['answers']
 
+        # Offset mapping is required to find the exact tokens representing the answer
         encoding = self.tokenizer(
             question,
             context,
@@ -98,16 +103,14 @@ class QADataset(Dataset):
         start_positions = 0
         end_positions = 0
 
+        # Mapping logic: translates character-level start/end to token indices
         if len(answers['answer_start']) > 0:
             start_char = answers['answer_start'][0]
-            try:
-                end_char = start_char + len(answers['text'][0])
-            except IndexError:
-                end_char = start_char
+            end_char = start_char + len(answers['text'][0])
 
             sequence_ids = encoding.sequence_ids(0)
             
-            # Find start and end token indices
+            # Find the boundaries of the context within the input_ids
             idx = 0
             while idx < len(sequence_ids) and sequence_ids[idx] != 1:
                 idx += 1
@@ -116,6 +119,7 @@ class QADataset(Dataset):
                 idx += 1
             context_end = idx - 1
 
+            # Determine the token indices that contain the answer characters
             if context_end >= context_start:
                 if offset_mapping[context_start][0] <= start_char and offset_mapping[context_end][1] >= end_char:
                     idx = context_start

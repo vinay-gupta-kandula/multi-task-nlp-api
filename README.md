@@ -1,326 +1,115 @@
-# Multi-Task NLP API (BERT + MLflow + FastAPI + ONNX)
+# 🤖 Multi-Task NLP API: Sentiment, NER, and QA
 
-A production-style Natural Language Processing system that performs **Sentiment Analysis**, **Named Entity Recognition**, and **Question Answering** using a single shared BERT-based model.
-The project demonstrates an end-to-end **MLOps workflow**: data → training → experiment tracking → model registry → optimized inference → monitored API.
-
----
-
-## Problem Statement
-
-Typical NLP projects solve only one task (classification OR NER OR QA).
-In real industry systems, multiple NLP capabilities must run together efficiently.
-
-This project implements a **Multi-Task Learning architecture** where a single transformer encoder learns shared language understanding and supports multiple downstream tasks simultaneously.
+This repository contains a production-grade **Multi-Task NLP System** designed for high-performance inference and robust experiment tracking. It utilizes a single **DistilBERT** backbone fine-tuned to perform **Sentiment Analysis**, **Named Entity Recognition (NER)**, and **Extractive Question Answering (QA)** simultaneously.
 
 ---
 
-## Key Features
+## 🧰 Tech Stack
 
-### Machine Learning
-
-* Multi-Task Learning with shared DistilBERT encoder
-* Task-specific heads for Sentiment, NER, and QA
-* Fine-tuned on real datasets (SST-2, CoNLL-2003, SQuAD)
-* Automatic preprocessing pipeline
-
-### MLOps
-
-* MLflow experiment tracking
-* Automatic training on container startup
-* Artifact storage (model + metrics)
-* Model version loading from MLflow
-
-### Production Inference
-
-* Model exported to ONNX (fast inference)
-* FastAPI serving REST endpoints
-* Pydantic validation
-* Health checks
-* Prometheus monitoring metrics
-
-### DevOps
-
-* Fully containerized
-* One-command execution
-* Reproducible environment
+* **Core:** Python 3.10, PyTorch, Hugging Face Transformers
+* **Backbone Model:** `distilbert-base-uncased`
+* **Inference Optimization:** ONNX & ONNX Runtime
+* **API Framework:** FastAPI & Uvicorn
+* **MLOps & Tracking:** MLflow
+* **Monitoring:** Prometheus
+* **Infrastructure:** Docker & Docker Compose
 
 ---
 
-## System Architecture
+## 🏗 Project Architecture
 
-```
-Datasets → Preprocessing → Multi-Task Training → MLflow Tracking
-        → ONNX Export → FastAPI Inference → Monitoring
-```
+The system follows a **Hard Parameter Sharing** approach, where a shared transformer encoder reduces the memory footprint and latency compared to running three separate models.
 
-### Workflow
+```mermaid
+graph TD
+    A[Client] -->|REST Request| B[FastAPI Service]
+    B -->|Inference| C[ONNX Runtime]
+    C -->|Shared Backbone| D[DistilBERT Encoder]
+    D --> E[Sentiment Head]
+    D --> F[NER Head]
+    D --> G[QA Head]
+    B -->|Logging| H[MLflow Artifact Store]
+    B -->|Monitoring| I[Prometheus Metrics]
 
-1. Docker starts MLflow tracking server
-2. Data automatically downloads & preprocesses
-3. Multi-task model trains
-4. Metrics + artifacts stored in MLflow
-5. ONNX model exported
-6. API loads latest model from MLflow
-7. Endpoints ready for prediction
-
----
-
-## Project Structure
-
-```
-multi-task-nlp-api/
-│
-├── src/
-│   ├── train.py              # training + logging + ONNX export
-│   ├── main.py               # FastAPI inference server
-│   ├── model.py              # multi-task architecture
-│   ├── data_loader.py        # dataset classes
-│   ├── preprocess.py         # dataset processing
-│   └── inference.py          # prediction logic
-│
-├── data/                     # processed datasets (auto-generated)
-├── model/                    # saved PyTorch model
-├── onnx/                     # exported ONNX model
-├── mlruns/                   # MLflow experiments
-│
-├── Dockerfile
-├── docker-compose.yml
-├── requirements.txt
-└── README.md
 ```
 
 ---
 
-## Datasets Used
+## ⚡ Quick Start
 
-| Task                     | Dataset    |
-| ------------------------ | ---------- |
-| Sentiment Analysis       | SST-2      |
-| Named Entity Recognition | CoNLL-2003 |
-| Question Answering       | SQuAD      |
+### 1. System Requirements
 
-Datasets are downloaded automatically during first run.
+* **RAM:** Minimum 6GB (8GB recommended for training).
+* **Environment:** Docker Desktop with WSL2 backend (Windows) or Docker Engine (Linux/Mac).
+* **Network:** Internet access required for initial dataset and model downloads.
 
----
+### 2. Configuration
 
-## How to Run
+Ensure your `.env` file exists in the root (based on `.env.example`):
 
-### Step 1 — Configure Environment
-
-Create `.env` file (already matches `.env.example`)
-
-```
+```bash
 MLFLOW_TRACKING_URI=http://mlflow:5000
 MLFLOW_EXPERIMENT_NAME=MultiTaskNLP
+
 ```
 
----
+### 3. Launch
 
-### Step 2 — Start the System
+Run the following command to build the services, trigger the training pipeline, and start the API:
 
 ```bash
 docker-compose up --build
-```
 
-This will automatically:
-
-1. Start MLflow UI → [http://localhost:5000](http://localhost:5000)
-2. Download datasets
-3. Train model
-4. Log metrics
-5. Export ONNX model
-6. Launch API → [http://localhost:8000](http://localhost:8000)
-
-Training runs only on first startup. Later runs reuse artifacts.
-
----
-
-## API Endpoints
-
----
-
-### Health Check
-
-```
-GET /health
-```
-
-Response:
-
-```
-{"status": "ok"}
 ```
 
 ---
 
-### Sentiment Analysis
+## 📡 API Endpoints & Usage
 
-```
-POST /predict/sentiment
-```
+### ⚙️ Model Loading Logic
 
-Request:
+On startup, the FastAPI application performs a **dynamic handshake** with the MLflow tracking server. It retrieves the latest successful run, downloads the `onnx/model.onnx` artifact, and initializes an **ONNX Runtime session** for CPU-optimized inference.
 
-```json
-{
-  "text": "I love this project"
-}
-```
-
-Response:
-
-```json
-{
-  "text": "I love this project",
-  "sentiment": "positive",
-  "score": 4.52
-}
-```
+| Endpoint | Method | Input Sample |
+| --- | --- | --- |
+| `/predict/sentiment` | `POST` | `{"text": "I love this project"}` |
+| `/predict/ner` | `POST` | `{"text": "Apple is buying a startup in London"}` |
+| `/predict/qa` | `POST` | `{"context": "...", "question": "..."}` |
+| `/metrics` | `GET` | Scrapable Prometheus text format |
+| `/health` | `GET` | Readiness check for the ONNX session |
 
 ---
 
-### Named Entity Recognition
+## 🧠 Training & MLOps Pipeline
 
-```
-POST /predict/ner
-```
+### Data Processing
 
-Request:
+The `src/preprocess.py` script automatically fetches and formats the **SST-2**, **CoNLL-2003**, and **SQuAD** datasets into a unified JSON schema saved in `data/processed/`.
 
-```json
-{
-  "text": "Apple is buying a startup in London"
-}
-```
+### Experiment Tracking
 
-Response:
+The `src/train.py` script logs the following to **MLflow**:
 
-```json
-{
-  "entities": [
-    {
-      "text": "Apple",
-      "type": "ORG",
-      "start_char": 0,
-      "end_char": 5
-    }
-  ]
-}
-```
+* **Parameters:** Learning rate, epochs, batch size, and backbone model name (`distilbert-base-uncased`).
+* **Artifacts:** Full PyTorch model directory, exported ONNX graph, and `metrics.json`.
+* **Optimization:** The model is exported with **dynamic axes**, allowing the API to handle variable sequence lengths.
 
 ---
 
-### Question Answering
+## ⚠️ Known Limitations & Design Choices
 
-```
-POST /predict/qa
-```
-
-Request:
-
-```json
-{
-  "context": "The speed of light is 299,792 km per second.",
-  "question": "What is the speed of light?"
-}
-```
-
-Response:
-
-```json
-{
-  "answer": {
-    "text": "299,792 km per second",
-    "start_char": 22,
-    "end_char": 43,
-    "score": 12.3
-  }
-}
-```
+* **Training Duration:** To ensure the system remains within standard evaluation timeframes and container resource limits, the model is configured for **5 epochs** on a 500-sample slice per task.
+* **Resource Constraints:** The training data is intentionally sampled to prevent **Docker Exit Code 137 (OOM)** during the shared-memory-intensive training phase.
+* **Inference Focus:** The system is strictly optimized for **CPU inference** using ONNX Runtime, making it ideal for cost-effective cloud deployments where GPUs are unavailable.
 
 ---
 
-## Monitoring
+## 📊 Monitoring
 
-Prometheus metrics available:
+Prometheus metrics are exposed at `/metrics`.
 
-```
-GET /metrics
-```
-
-Includes:
-
-* Request count
-* Latency
-* Endpoint usage
+* `api_requests_total`: Labeled by endpoint path.
+* `api_request_latency_seconds`: Histogram for tracking P95/P99 response times.
 
 ---
-
-## MLflow Tracking
-
-Open:
-
-```
-http://localhost:5000
-```
-
-You can view:
-
-* Parameters
-* Metrics
-* Artifacts
-* ONNX model
-
----
-
-## Model Details
-
-| Component     | Description                                          |
-| ------------- | ---------------------------------------------------- |
-| Encoder       | DistilBERT                                           |
-| Training Type | Multi-Task Learning                                  |
-| Tasks         | Classification + Sequence Labeling + Span Prediction |
-| Inference     | ONNX Runtime                                         |
-
----
-
-## What This Project Demonstrates
-
-* Multi-Task Deep Learning
-* Model Lifecycle Management
-* Experiment Tracking
-* Production API Deployment
-* Model Optimization
-* Observability & Monitoring
-* Reproducible ML Systems
-
----
-
-## Why This Matters
-
-Instead of deploying three separate models, a single shared encoder:
-
-* reduces memory usage
-* improves inference speed
-* shares language understanding
-* simplifies deployment
-
-This mirrors real industry NLP systems (search engines, assistants, chat platforms).
-
----
-
-## Future Improvements
-
-* GPU training support
-* Model registry versioning
-* CI/CD pipeline
-* Automatic retraining
-* Distributed inference
-
----
-
-✅ **End-to-End ML System: Data → Training → Tracking → Serving → Monitoring**
-
----
-
 
