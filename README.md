@@ -33,7 +33,28 @@ graph TD
 
 ```
 
----
+## 📂 Project Structure
+
+```text
+.
+├── data/
+│   └── processed/          # Unified JSON datasets (SST-2, CoNLL, SQuAD)
+├── mlruns/                 # MLflow tracking database & artifact store
+├── src/                    # Python Source Code
+│   ├── data_loader.py      # Multi-task PyTorch Dataset implementations
+│   ├── main.py             # FastAPI server with ONNX Runtime & Prometheus
+│   ├── model.py            # Shared-encoder Model Architecture
+│   ├── preprocess.py       # Data ingestion from Hugging Face Hub
+│   └── train.py            # Training loop, MLflow logging, & ONNX export
+├── .env                    # Environment variables (Tracking URI, Exp Name)
+├── .env.example            # Template for environment configuration
+├── .gitignore              # Prevents tracking of data, cache, and mlruns
+├── docker-compose.yml      # Multi-service orchestration (API + MLflow)
+├── Dockerfile              # CPU-optimized container definition
+├── requirements.txt        # Dependency manifest
+└── README.md               # Project documentation
+
+```
 
 ## ⚡ Quick Start
 
